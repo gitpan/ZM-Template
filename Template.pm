@@ -1,7 +1,7 @@
 # Zet Maximum template parser
 #
 #		2002-2003
-#		Version 0.1.2	production
+#		Version 0.5.0	production
 #		Author	Maxim Kashliak	(maxico@softhome.net)
 #				Aleksey V. Ivanov	(avimail@zmaximum.ru)
 #
@@ -18,21 +18,22 @@ use Carp;
 
 no strict 'refs';
 
-$ZM::Template::VERSION = '0.1.2';
+$ZM::Template::VERSION = '0.5.0';
 
 my %tokens;
 
 sub new()
 {
     my $class = shift;
-    my %baseHtml = ();
+	my %baseHtml=@_;
+	$baseHtml{tag}="__" if ($baseHtml{tag} eq "");
     bless \%baseHtml, $class;
     return \%baseHtml
 }
 
 sub src()
 {
-    if ($#_ != 1)
+    if ($#_ !=1)
     {
         die_msg("Error! template function requires a single parameter\n");
     }
@@ -69,11 +70,11 @@ sub _parse_tokens
     my $htmlString=shift;
     my ($padding, $token, $remainder);
 
-    while ($htmlString =~ /.*?((__x_.+?__\n)|(__.+?__))/sg)
+    while ($htmlString =~ /.*?(($self->{tag}x_.+?$self->{tag}\n)|($self->{tag}([^_]).*?$self->{tag}))/sg)
     {
         $token = $1;
         $token =~ s/\n$//g;         # chomp $token (chomp bust as $/ undef'd)
-		$token =~ s/(^__|__$)//g;
+		$token =~ s/(^$self->{tag}|$self->{tag}$)//g;
 		$tokens{$token}=1;
     }
 }
@@ -91,7 +92,7 @@ sub AUTOLOAD
 			$bl_new=~s/^x_//; #надо обойтись без регекспа
 			if ($self->{loops}{$bl_new} ne "") 
 			{
-			    $self->_post_loop($block) unless(strstr($self->{loops}{$bl_new},"__".$token."__"));
+			    $self->_post_loop($block) unless(strstr($self->{loops}{$bl_new},"$self->{tag}".$token."$self->{tag}"));
 			}
 			$self->_set_loop($token,$value,$block);
 	    }
@@ -100,12 +101,30 @@ sub AUTOLOAD
     		$self->{html}=$self->set_to_str($token,$value,$self->{html});
 	    }
 	}
-	else
-	{
-#	    print "$token NOT found\n";
-	}
 }
 
+sub setif
+{
+	my $self = shift;
+	my $token = shift;
+	
+	$self->{ifs}->{$token}=1;
+}
+
+sub fromfile
+{
+	my $self = shift;
+	my $token = shift;
+	my $file = shift;
+	my $block = shift;
+	
+	open (my $f,"<$file") or return;
+	my $suxx=$/;
+    undef $/;
+	my $filecontent=<$f>;
+	$/=$suxx;
+	$self->$token($filecontent,$block);
+}
 
 sub _set_loop
 {
@@ -124,23 +143,26 @@ sub _set_loop
     }
     if($self->{loops}{$block."_new"} ne "")
     {
+		# если уже выставлялись токены в этом цикле
         $loop=$self->{loops}{$block."_new"};
     }
     else
     {
-        $loop_name="__x_".$block."__";
+		# если еще не вставлялись токены в этом цикле,
+		# то выдираем тело цикла из всего шаблона
+        $loop_name="$self->{tag}x_".$block."$self->{tag}";
         $loop_begin=strstr($self->{html},$loop_name);
         $loop_begin=substr($loop_begin,length($loop_name));
         $loop=str_before($loop_begin,$loop_name);
     }
-    if(strstr($loop,"__z_".$block."__"))
+    if(strstr($loop,"$self->{tag}z_".$block."$self->{tag}"))
     {
         $num=$self->{strnum}{$block};
         $loop2=$loop3=$loop;
-        while(($num)&&($loop2=str_before($loop3,"__z_".$block."__")))
+        while(($num)&&(($loop2=str_before($loop3,"$self->{tag}z_".$block."$self->{tag}")) ne $loop3))
         {
             $num--;
-            $loop3=str_after($loop3,"__z_".$block."__");
+            $loop3=str_after($loop3,"$self->{tag}z_".$block."$self->{tag}");
         }
         if($num==0)
         {
@@ -149,13 +171,13 @@ sub _set_loop
         }
 		elsif($num>=1)
 		{
-            $loop=str_before($loop,"__z_".$block."__");
-            $self->{strnum}{$block}=2;
+            #$loop=str_before($loop,"$self->{tag}z_".$block."$self->{tag}");
+			$loop=$loop3;
+            $self->{strnum}{$block}=1;
         }
     }
     $self->{loops}{$block."_new"}=$self->set_to_str($token,$value,$loop);
 }
-
 
 sub _post_loop
 {
@@ -165,15 +187,15 @@ sub _post_loop
     $block=~s/^x_//;
 
     my ($text,$pos, $before_loop, $loop, $loop_name, $after_loop);
-    #Find inner loops
+    #Find and post inner loops
     $text=$self->{loops}{$block."_new"};
-    while($pos=strstr($text,"__x_"))
+    while($pos=strstr($text,"$self->{tag}x_"))
     {
         $before_loop=substr($text,0,length($text)-length($pos));
         $loop_name=substr($pos,4);
-        $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"__")));
-        $loop=strstr($text,"__x_".$loop_name."__");
-        $after_loop=str_after(str_after($loop,"__x_".$loop_name."__"),"__x_".$loop_name."__");
+        $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"$self->{tag}")));
+        $loop=strstr($text,"$self->{tag}x_".$loop_name."$self->{tag}");
+        $after_loop=str_after(str_after($loop,"$self->{tag}x_".$loop_name."$self->{tag}"),"$self->{tag}x_".$loop_name."$self->{tag}");
         $loop=substr($loop,0,length($loop)-length($after_loop));
         $self->_post_loop($loop_name);
         $text=$before_loop.$self->{loops}{$loop_name}.$after_loop;
@@ -196,16 +218,16 @@ sub set_to_str
     my $ret="";
     my $sub_str;
     my $loop_name;
-    while(($sub_str=str_before($str,"__x_")) ne $str)
+    while(($sub_str=str_before($str,"$self->{tag}x_")) ne $str)
     {
 	    # получаем имя цикла
-		$loop_name=str_before(substr($str,length($sub_str)+4),"__");
+		$loop_name=str_before(substr($str,length($sub_str)+4),"$self->{tag}");
 		# заменяем переменную перед циклом, если она там есть
-        $ret.=str_replace("__".$token."__",$value,$sub_str);
-        $ret.="__x_".$loop_name."__".str_before(substr($str,length($sub_str)+length($loop_name)+6),"__x_".$loop_name."__")."__x_".$loop_name."__";
-        $str=str_after(substr($str,length($sub_str)+length($loop_name)+6),"__x_".$loop_name."__");
+        $ret.=str_replace("$self->{tag}".$token."$self->{tag}",$value,$sub_str);
+        $ret.="$self->{tag}x_".$loop_name."$self->{tag}".str_before(substr($str,length($sub_str)+length($loop_name)+6),"$self->{tag}x_".$loop_name."$self->{tag}")."$self->{tag}x_".$loop_name."$self->{tag}";
+        $str=str_after(substr($str,length($sub_str)+length($loop_name)+6),"$self->{tag}x_".$loop_name."$self->{tag}");
     }
-    $ret.=str_replace("__".$token."__",$value,$str);
+    $ret.=str_replace("$self->{tag}".$token."$self->{tag}",$value,$str);
     return($ret);
 }
 
@@ -224,18 +246,63 @@ sub _fill_loops
 	    	$self->_post_loop($loop_name) if($self->{loops}{$_} ne "");
 		}
     }
-    # удаляем незаполненные лупы
-    while($pos=strstr($text,"__x_"))
+    # удаляем незаполненные лупы и вставляем заполненные в окончательный текст
+    while($pos=strstr($text,"$self->{tag}x_"))
     {
         $before_loop=substr($text,0,length($text)-length($pos));
         $loop_name=substr($pos,4);
-        $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"__")));
-        $loop=strstr($text,"__x_".$loop_name."__");
-        $after_loop=str_after(str_after($loop,"__x_".$loop_name."__"),"__x_".$loop_name."__");
+        $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"$self->{tag}")));
+        #$loop=strstr($text,"$self->{tag}x_".$loop_name."$self->{tag}");
+		$loop=$pos;
+        $after_loop=str_after(str_after($loop,"$self->{tag}x_".$loop_name."$self->{tag}"),"$self->{tag}x_".$loop_name."$self->{tag}");
         $loop=substr($loop,0,length($loop)-length($after_loop));
         $text=$before_loop.$self->{loops}{$loop_name}.$after_loop;
     }
-    $text=~s/__[\d\w_\-]+__//g;
+	my $tag=$self->{tag};
+	my $if_name;
+	# удаляем незаполненные IF и вставляем заполненные в окончательный текст
+    while($pos=strstr($text,"$self->{tag}if_"))
+    {
+        $before_loop=substr($text,0,length($text)-length($pos));
+        $loop_name=substr($pos,5);
+        $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"$self->{tag}")));
+		$if_name="$self->{tag}if_".$loop_name."$self->{tag}";
+		$loop=$pos;
+		$after_loop=str_after(str_after($loop,$if_name),$if_name);
+		$loop=substr($loop,length($if_name),length($loop)-length($after_loop)-length($if_name)*2);
+		#$loop=substr($loop,length($if_name),length($loop)-length($after_loop));
+		#print "##################################\n";
+		#print "LOOP $if_name: $loop\n";
+		#print "##################################\n";
+		#print "AFTERLOOP: $after_loop\n";
+		#print "##################################\n";
+		unless(defined $self->{ifs}->{$loop_name})
+		{
+			#IF не выставлялся
+			if($pos=strstr($loop,"$self->{tag}else_".$loop_name))
+			{
+				#else есть и его надо оставить
+				$loop=substr($pos,9+length($loop_name));
+			}
+			else
+			{
+				#else нет
+				$loop="";
+			}
+		}
+		else
+		{
+			#убираем содержимое ELSE, если таковой есть
+			if($pos=strstr($loop,"$self->{tag}else_".$loop_name))
+			{
+				#else есть и его надо оставить
+				$loop=str_before($loop,$pos);
+			}
+		}
+		$text=$before_loop.$loop.$after_loop;
+    }
+#	print "|$tag|";
+    $text=~s/($tag)[\d\w_\-]+($tag)//g;
     return($text);
 }
 
@@ -252,7 +319,7 @@ sub strstr
     }
     else
     {
-	return undef;
+		return undef;
     }
 }
 
@@ -304,15 +371,18 @@ sub output()
     }
 
     print "\n";
-
-    $self->{html}=$self->_fill_loops($self->{html});
-    print $self->{html};
+#    $self->{html}=$self->_fill_loops($self->{html});
+    print $self->htmlString();
 }
 
 sub htmlString()
 {
     my $self = shift;
+
     $self->{html}=$self->_fill_loops($self->{html});
+	# обработка SSI деректив внутри темплейта
+	eval('require ZM::SSI;');
+	$self->{html}=ZM::SSI::parse($self->{html}) unless $@;
     return $self->{html};
 }
 
@@ -345,7 +415,7 @@ ZM::Template - Merges runtime data with static HTML or Plain Text template file.
 
 =head1 VERSION
 
- Template.pm v 0.1.2
+ Template.pm v 0.5.0
 
 =head1 SYNOPSIS
 
@@ -392,6 +462,11 @@ In an ideal web system, the HTML used to build a web page would
 be kept distinct from the application logic populating the web page.
 This module tries to achieve this by taking over the chore of merging runtime
 data with a static html template.
+Template can contain SSI derectives like
+<!--#include file="..." --> and
+<!--#exec cgi="..." -->
+It is used ZM::SSI for SSI parsing. If module ZM::SSI not installed SSI
+derectives will be ignoring.
 
 The ZM::Template module can address the following template scenarios :
 
@@ -458,6 +533,7 @@ For interleave data in loop used __z_ token
  __x_friends__
  </table>
 
+Count of __z_ token is UNLIMITED.
 
 Template engine understand inner loops like this
 
@@ -470,6 +546,38 @@ Template engine understand inner loops like this
   __email__
   __x_emails__
  Company web: __web__
+ __x_companies__
+ 
+For condition __if_ token. They must always come in pairs.
+
+ List of companies:
+ __x_companies__
+ Company name: __name__
+ Company address: __address__
+ Company e-mails:
+  __x_emails__
+  __email__
+  __x_emails__
+ __if_company_web__
+ Company web: __web__
+ __if_company_web__
+ __x_companies__
+ 
+Template engine understand __else_ token within __if_ token.
+
+ List of companies:
+ __x_companies__
+ Company name: __name__
+ Company address: __address__
+ Company e-mails:
+  __x_emails__
+  __email__
+  __x_emails__
+ __if_company_web__
+ Company web: __web__
+ __else_company_web__
+ Company have not web site
+ __if_company_web__
  __x_companies__
 
 =head1 METHODS
@@ -509,6 +617,20 @@ tokenName($$)
 
 Assigns to the 'tokenName' token, within the repeating block specified in 2nd
 parameter, the value specified as the first parameter.
+
+setif(tokenName)
+
+Set true for __if_ token type.
+
+fromfile($$)
+
+Assigns to the token specified as parameter the content of file specified in 2nd
+parameter.
+
+fromfile($$$)
+
+Assigns to the token specified as parameter, within the repeating block specified
+in 3nd parameter, the value specified in 2nd parameter.
 
 =head1 EXAMPLES
 
@@ -664,10 +786,15 @@ The code :
 
 =head1 HISTORY
 
- Oct 2003	Version 0.1.2	Fixed some errors.
+ Oct 2003	Version 0.5.0	Added __else_ token type.
+ Oct 2003	Version 0.4.1	Fixed some errors with __z_ token type.
+ Oct 2003	Version 0.4.0	Added __if_ token type.
+ Oct 2003	Version 0.3.1	Fixed some errors.
+ Oct 2003	Version 0.3.0	Added SSI parsing inside template.
+ Oct 2003	Version 0.2.0	Added fromfile method.
  Oct 2003	Version 0.1.1	Some fixes in documentation, messages and code.
  Oct 2003	Version 0.1.0	Added __z_ token type.
- Oct 2003	Version 0.0.3	First release.
+ Oct 2003	Version 0.0.3	First release.
 
 =head1 AUTHOR
 

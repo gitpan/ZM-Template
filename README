@@ -3,7 +3,7 @@ NAME
     template file.
 
 VERSION
-     Template.pm v 0.1.2
+     Template.pm v 0.5.0
 
 SYNOPSIS
     How to merge data with a template.
@@ -47,7 +47,10 @@ DESCRIPTION
     In an ideal web system, the HTML used to build a web page would be kept
     distinct from the application logic populating the web page. This module
     tries to achieve this by taking over the chore of merging runtime data
-    with a static html template.
+    with a static html template. Template can contain SSI derectives like
+    <!--#include file="..." --> and <!--#exec cgi="..." --> It is used
+    ZM::SSI for SSI parsing. If module ZM::SSI not installed SSI derectives
+    will be ignoring.
 
     The ZM::Template module can address the following template scenarios :
 
@@ -104,6 +107,8 @@ DESCRIPTION
      __x_friends__
      </table>
 
+    Count of __z_ token is UNLIMITED.
+
     Template engine understand inner loops like this
 
      List of companies:
@@ -115,6 +120,38 @@ DESCRIPTION
       __email__
       __x_emails__
      Company web: __web__
+     __x_companies__
+ 
+    For condition __if_ token. They must always come in pairs.
+
+     List of companies:
+     __x_companies__
+     Company name: __name__
+     Company address: __address__
+     Company e-mails:
+      __x_emails__
+      __email__
+      __x_emails__
+     __if_company_web__
+     Company web: __web__
+     __if_company_web__
+     __x_companies__
+ 
+    Template engine understand __else_ token within __if_ token.
+
+     List of companies:
+     __x_companies__
+     Company name: __name__
+     Company address: __address__
+     Company e-mails:
+      __x_emails__
+      __email__
+      __x_emails__
+     __if_company_web__
+     Company web: __web__
+     __else_company_web__
+     Company have not web site
+     __if_company_web__
      __x_companies__
 
 METHODS
@@ -152,6 +189,20 @@ METHODS
 
     Assigns to the 'tokenName' token, within the repeating block specified
     in 2nd parameter, the value specified as the first parameter.
+
+    setif(tokenName)
+
+    Set true for __if_ token type.
+
+    fromfile($$)
+
+    Assigns to the token specified as parameter the content of file
+    specified in 2nd parameter.
+
+    fromfile($$$)
+
+    Assigns to the token specified as parameter, within the repeating block
+    specified in 3nd parameter, the value specified in 2nd parameter.
 
 EXAMPLES
   Example 1.
@@ -303,10 +354,15 @@ EXAMPLES
      $templ->output('Content-Type: text/html');
 
 HISTORY
-     Oct 2003       Version 0.1.2   Fixed some errors.
+     Oct 2003       Version 0.5.0   Added __else_ token type.
+     Oct 2003       Version 0.4.1   Fixed some errors with __z_ token type.
+     Oct 2003       Version 0.4.0   Added __if_ token type.
+     Oct 2003       Version 0.3.1   Fixed some errors.
+     Oct 2003       Version 0.3.0   Added SSI parsing inside template.
+     Oct 2003       Version 0.2.0   Added fromfile method.
      Oct 2003       Version 0.1.1   Some fixes in documentation, messages and code.
      Oct 2003       Version 0.1.0   Added __z_ token type.
-     Oct 2003       Version 0.0.3   First release.
+     Oct 2003       Version 0.0.3   First release.
 
 AUTHOR
      Zet Maximum ltd.
