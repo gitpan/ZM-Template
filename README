@@ -3,7 +3,7 @@ NAME
     template file.
 
 VERSION
-     Template.pm v 0.1.1
+     Template.pm v 0.1.2
 
 SYNOPSIS
     How to merge data with a template.
@@ -303,9 +303,10 @@ EXAMPLES
      $templ->output('Content-Type: text/html');
 
 HISTORY
+     Oct 2003       Version 0.1.2   Fixed some errors.
      Oct 2003       Version 0.1.1   Some fixes in documentation, messages and code.
-     Oct 2003       Version 0.1.0   Added __z_ token type
-     Oct 2003       Version 0.0.3   First release
+     Oct 2003       Version 0.1.0   Added __z_ token type.
+     Oct 2003       Version 0.0.3   First release.
 
 AUTHOR
      Zet Maximum ltd.

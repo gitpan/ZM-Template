@@ -1,7 +1,7 @@
 # Zet Maximum template parser
 #
 #		2002-2003
-#		Version 0.1.1	production
+#		Version 0.1.2	production
 #		Author	Maxim Kashliak	(maxico@softhome.net)
 #				Aleksey V. Ivanov	(avimail@zmaximum.ru)
 #
@@ -18,7 +18,7 @@ use Carp;
 
 no strict 'refs';
 
-$ZM::Template::VERSION = '0.1.1';
+$ZM::Template::VERSION = '0.1.2';
 
 my %tokens;
 
@@ -209,7 +209,7 @@ sub set_to_str
     return($ret);
 }
 
-sub __fill_loops
+sub _fill_loops
 {	
     my $self=shift;
     my $text=shift;
@@ -345,7 +345,7 @@ ZM::Template - Merges runtime data with static HTML or Plain Text template file.
 
 =head1 VERSION
 
- Template.pm v 0.1.1
+ Template.pm v 0.1.2
 
 =head1 SYNOPSIS
 
@@ -664,9 +664,10 @@ The code :
 
 =head1 HISTORY
 
+ Oct 2003	Version 0.1.2	Fixed some errors.
  Oct 2003	Version 0.1.1	Some fixes in documentation, messages and code.
- Oct 2003	Version 0.1.0	Added __z_ token type
- Oct 2003	Version 0.0.3	First release
+ Oct 2003	Version 0.1.0	Added __z_ token type.
+ Oct 2003	Version 0.0.3	First release.
 
 =head1 AUTHOR
 
