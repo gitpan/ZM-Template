@@ -1,7 +1,7 @@
 # Zet Maximum template parser
 #
 #		2002-2003
-#		Version 0.5.0	production
+#		Version 0.5.2	production
 #		Author	Maxim Kashliak	(maxico@softhome.net)
 #				Aleksey V. Ivanov	(avimail@zmaximum.ru)
 #
@@ -18,7 +18,7 @@ use Carp;
 
 no strict 'refs';
 
-$ZM::Template::VERSION = '0.5.0';
+$ZM::Template::VERSION = '0.5.2';
 
 my %tokens;
 
@@ -47,6 +47,9 @@ sub src()
     my $tmplString = <HTML>;
     close HTML;
     $/=$suxx;
+	# обработка SSI деректив внутри темплейта
+	eval('require ZM::SSI;');
+	$tmplString = ZM::SSI::parse($tmplString) unless $@;
 	$self->srcString($tmplString);
 }
 
@@ -107,8 +110,16 @@ sub setif
 {
 	my $self = shift;
 	my $token = shift;
+	my $loop = shift;
 	
-	$self->{ifs}->{$token}=1;
+	if($loop eq "")
+	{
+		$self->{ifs}->{$token}=1;
+	}
+	else
+	{
+		$self->{ifs_loop}->{$loop}->{$token}=1;
+	}
 }
 
 sub fromfile
@@ -202,6 +213,7 @@ sub _post_loop
         $self->{loops}{$loop_name}="";
         $self->{strnum}{$loop_name}="";
     }
+	$text=_fill_ifs($self,$text,"x_".$block);
     $self->{loops}{$block."_new"}=$text;
     #POST
     $self->{loops}{$block}.=$self->{loops}{$block."_new"};
@@ -229,6 +241,66 @@ sub set_to_str
     }
     $ret.=str_replace("$self->{tag}".$token."$self->{tag}",$value,$str);
     return($ret);
+}
+
+sub _fill_ifs
+{
+	my $self=shift;
+	my $text=shift;
+	my $l_name=shift;
+	my ($pos,$before_loop,$loop_name,$loop,$after_loop,$if_name,$h_ifs);
+	if($l_name eq "")
+	{
+		$h_ifs=$self->{ifs};
+	}
+	else
+	{
+		$h_ifs=$self->{ifs_loop}->{$l_name};
+	}
+	
+	# удаляем незаполненные IF и вставляем заполненные в окончательный текст
+    while($pos=strstr($text,"$self->{tag}if_"))
+    {
+        $before_loop=substr($text,0,length($text)-length($pos));
+        $loop_name=substr($pos,5);
+        $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"$self->{tag}")));
+		$if_name="$self->{tag}if_".$loop_name."$self->{tag}";
+		$loop=$pos;
+		$after_loop=str_after(str_after($loop,$if_name),$if_name);
+		$loop=substr($loop,length($if_name),length($loop)-length($after_loop)-length($if_name)*2);
+		#$loop=substr($loop,length($if_name),length($loop)-length($after_loop));
+		#print "##################################\n";
+		#print "LOOP $if_name: $loop\n";
+		#print "##################################\n";
+		#print "AFTERLOOP: $after_loop\n";
+		#print "##################################\n";
+		unless(defined $h_ifs->{$loop_name})
+		{
+			#IF не выставлялся
+			if($pos=strstr($loop,"$self->{tag}else_".$loop_name))
+			{
+				#else есть и его надо оставить
+				$loop=substr($pos,9+length($loop_name));
+			}
+			else
+			{
+				#else нет
+				$loop="";
+			}
+		}
+		else
+		{
+			#убираем содержимое ELSE, если таковой есть
+			if($pos=strstr($loop,"$self->{tag}else_".$loop_name))
+			{
+				#else есть и его надо оставить
+				$loop=str_before($loop,$pos);
+			}
+			undef $h_ifs->{$loop_name};
+		}
+		$text=$before_loop.$loop.$after_loop;
+    }
+	return($text);
 }
 
 sub _fill_loops
@@ -260,47 +332,7 @@ sub _fill_loops
     }
 	my $tag=$self->{tag};
 	my $if_name;
-	# удаляем незаполненные IF и вставляем заполненные в окончательный текст
-    while($pos=strstr($text,"$self->{tag}if_"))
-    {
-        $before_loop=substr($text,0,length($text)-length($pos));
-        $loop_name=substr($pos,5);
-        $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"$self->{tag}")));
-		$if_name="$self->{tag}if_".$loop_name."$self->{tag}";
-		$loop=$pos;
-		$after_loop=str_after(str_after($loop,$if_name),$if_name);
-		$loop=substr($loop,length($if_name),length($loop)-length($after_loop)-length($if_name)*2);
-		#$loop=substr($loop,length($if_name),length($loop)-length($after_loop));
-		#print "##################################\n";
-		#print "LOOP $if_name: $loop\n";
-		#print "##################################\n";
-		#print "AFTERLOOP: $after_loop\n";
-		#print "##################################\n";
-		unless(defined $self->{ifs}->{$loop_name})
-		{
-			#IF не выставлялся
-			if($pos=strstr($loop,"$self->{tag}else_".$loop_name))
-			{
-				#else есть и его надо оставить
-				$loop=substr($pos,9+length($loop_name));
-			}
-			else
-			{
-				#else нет
-				$loop="";
-			}
-		}
-		else
-		{
-			#убираем содержимое ELSE, если таковой есть
-			if($pos=strstr($loop,"$self->{tag}else_".$loop_name))
-			{
-				#else есть и его надо оставить
-				$loop=str_before($loop,$pos);
-			}
-		}
-		$text=$before_loop.$loop.$after_loop;
-    }
+	$text=_fill_ifs($self,$text);
 #	print "|$tag|";
     $text=~s/($tag)[\d\w_\-]+($tag)//g;
     return($text);
@@ -380,9 +412,7 @@ sub htmlString()
     my $self = shift;
 
     $self->{html}=$self->_fill_loops($self->{html});
-	# обработка SSI деректив внутри темплейта
-	eval('require ZM::SSI;');
-	$self->{html}=ZM::SSI::parse($self->{html}) unless $@;
+	
     return $self->{html};
 }
 
@@ -415,7 +445,7 @@ ZM::Template - Merges runtime data with static HTML or Plain Text template file.
 
 =head1 VERSION
 
- Template.pm v 0.5.0
+ Template.pm v 0.5.2
 
 =head1 SYNOPSIS
 
@@ -786,6 +816,7 @@ The code :
 
 =head1 HISTORY
 
+ Jun 2004	Version 0.5.2	Parse SSI before template parsing.
  Oct 2003	Version 0.5.0	Added __else_ token type.
  Oct 2003	Version 0.4.1	Fixed some errors with __z_ token type.
  Oct 2003	Version 0.4.0	Added __if_ token type.

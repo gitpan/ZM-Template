@@ -3,7 +3,7 @@ NAME
     template file.
 
 VERSION
-     Template.pm v 0.5.0
+     Template.pm v 0.5.2
 
 SYNOPSIS
     How to merge data with a template.
@@ -354,6 +354,7 @@ EXAMPLES
      $templ->output('Content-Type: text/html');
 
 HISTORY
+     Jun 2004       Version 0.5.2   Parse SSI before template parsing.
      Oct 2003       Version 0.5.0   Added __else_ token type.
      Oct 2003       Version 0.4.1   Fixed some errors with __z_ token type.
      Oct 2003       Version 0.4.0   Added __if_ token type.
