@@ -1,9 +1,9 @@
 # Zet Maximum template parser
 #
 #		2002-2003
-#		Version 0.1.0	production
+#		Version 0.1.1	production
 #		Author	Maxim Kashliak	(maxico@softhome.net)
-#				Aleksey Ivanov	(avi@zmaximum.ru)
+#				Aleksey V. Ivanov	(avimail@zmaximum.ru)
 #
 #		For latest releases, documentation, faqs, etc see the homepage at
 #			http://perl.zmaximum.ru
@@ -18,7 +18,7 @@ use Carp;
 
 no strict 'refs';
 
-$ZM::Template::VERSION = '0.1.0';
+$ZM::Template::VERSION = '0.1.1';
 
 my %tokens;
 
@@ -42,7 +42,7 @@ sub src()
 
     my $suxx=$/;
     undef $/;
-    open(HTML, "<$src") || die_msg("Cannot open html template file!<br>$src");
+    open(HTML, "<$src") || die_msg("Cannot open html template file!<br>($src)");
     my $tmplString = <HTML>;
     close HTML;
     $/=$suxx;
@@ -67,47 +67,36 @@ sub _parse_tokens
 {
     my $self=shift;
     my $htmlString=shift;
-#    print $htmlString;
     my ($padding, $token, $remainder);
 
     while ($htmlString =~ /.*?((__x_.+?__\n)|(__.+?__))/sg)
     {
         $token = $1;
         $token =~ s/\n$//g;         # chomp $token (chomp bust as $/ undef'd)
-	$token =~ s/(^__|__$)//g;
-
-#print " find token $token\n";
-	$tokens{$token}=1;
+		$token =~ s/(^__|__$)//g;
+		$tokens{$token}=1;
     }
-
 }
 
 sub AUTOLOAD
 {
-        my $token = $AUTOLOAD;
-        my ($self, $value, $block) = @_;
-#	print $self->{html};
-        $token =~ s/.*:://;
+	my $token = $AUTOLOAD;
+	my ($self, $value, $block) = @_;
+	$token =~ s/.*:://;
 	if (defined $tokens{$token})
 	{
-#	    print "->$token used\n";
-#	    if (substr($block,0,2) eq "x_")
 	    if ($block ne "")
 	    {
-		my $bl_new=$block."_new";
-		$bl_new=~s/^x_//; #надо обойтись без регекспа
-		if ($self->{loops}{$bl_new} ne "") 
-		{
-#		    print $self->{loops}{$bl_new}."\n---------------\n";
-		    $self->_post_loop($block) unless(strstr($self->{loops}{$bl_new},"__".$token."__"));
-#		    $self->_post_loop($block);
-		}
-#		print "Loop used\n";
-		$self->_set_loop($token,$value,$block);
+			my $bl_new=$block."_new";
+			$bl_new=~s/^x_//; #надо обойтись без регекспа
+			if ($self->{loops}{$bl_new} ne "") 
+			{
+			    $self->_post_loop($block) unless(strstr($self->{loops}{$bl_new},"__".$token."__"));
+			}
+			$self->_set_loop($token,$value,$block);
 	    }
 	    else
 	    {
-#		print "Var sets\n";
     		$self->{html}=$self->set_to_str($token,$value,$self->{html});
 	    }
 	}
@@ -135,7 +124,6 @@ sub _set_loop
     }
     if($self->{loops}{$block."_new"} ne "")
     {
-#	print "ВИЖУ!\n";
         $loop=$self->{loops}{$block."_new"};
     }
     else
@@ -159,15 +147,13 @@ sub _set_loop
             $loop=$loop2;
             $self->{strnum}{$block}++;
         }
-	elsif($num>=1)
-	{
+		elsif($num>=1)
+		{
             $loop=str_before($loop,"__z_".$block."__");
             $self->{strnum}{$block}=2;
         }
-#        print "#LOOP:$loop NUM:$num\n\n";
     }
     $self->{loops}{$block."_new"}=$self->set_to_str($token,$value,$loop);
-#    print "-----------LOOP: ".$block."_new".":\n".$self->{loops}{$block."_new"}."\n-----------\n";
 }
 
 
@@ -230,7 +216,7 @@ sub __fill_loops
 
     my ($pos, $before_loop, $loop_name, $loop, $after_loop);
 
-    # постим те лупы, что запонились, ноне заполнились
+    # постим те лупы, что запонились, но не заполнились
     foreach(keys %{$self->{loops}})
     {
 		if (($loop_name=str_before($_,"_new")) ne $_)
@@ -304,11 +290,6 @@ sub str_replace
     my $str2=shift;
     
     $str2=~s/$str/$str1/g;
-#    my $strbef=str_before($str2,$str);
-#    if ($strbef ne $str2)
-#    {
-#	return ($strbef.$str1.str_after($str2,$str));
-#    }
     return($str2);
 }
 
@@ -342,8 +323,16 @@ sub DESTROY()
 sub die_msg
 {
     my $msg = shift;
-    print "$msg\n";
-    die;
+	print "Content-type: text/html\n\n";
+	print <<EOF;
+	<HTML>
+		<HEAD></HEAD>
+	<BODY>
+		<b>ZM::Template Error:</b> $msg
+	</BODY>
+	</HTML>
+EOF
+    exit;
 }
 
 1;
@@ -356,7 +345,7 @@ ZM::Template - Merges runtime data with static HTML or Plain Text template file.
 
 =head1 VERSION
 
- Template.pm v 0.1.0
+ Template.pm v 0.1.1
 
 =head1 SYNOPSIS
 
@@ -373,10 +362,10 @@ The template :
 
 The code :
 
- use HTMLTMPL;
+ use ZM::Template;
 
  # Create a template object and load the template source.
- $templ = new HTMLTMPL;
+ $templ = new ZM::Template;
  $templ->src('example1.html');
 
  # Set values for tokens within the page
@@ -496,14 +485,14 @@ populate the template object.
 
 output(@)
 
-Merges the data already passed to the HTMLTMPL instance with the template file
+Merges the data already passed to the ZM::Template instance with the template file
 specified in src().
 The optional parameter is output first, followed by a blank line. These form
 the HTTP headers.
 
 htmlString()
 
-Returns a string of html produced by merging the data passed to the HTMLTMPL
+Returns a string of html produced by merging the data passed to the ZM::Template
 instance with the template specified in the src() method. No http headers are
 sent to the output string.
 
@@ -538,10 +527,10 @@ The template :
 
 The code :
 
- use HTMLTMPL;
+ use ZM::Template;
 
  # Create a template object and load the template source.
- $templ = new HTMLTMPL;
+ $templ = new ZM::Template;
  $templ->src('example1.html');
 
  # Set values for tokens within the page
@@ -591,10 +580,10 @@ The template :
 
 The code :
 
- use HTMLTMPL;
+ use ZM::Template;
 
  # Create the template object and load it.
- $templ = new HTMLTMPL;
+ $templ = new ZM::Template;
  $templ->src('example2.html');
 
  # Simulate obtaining data from database, etc and populate 300 blocks.
@@ -616,7 +605,7 @@ The code :
  #    Send the completed html document to the web server.
  $templ->output('Content-Type: text/html');
 
-=head2 Example 5.
+=head2 Example 3.
 
 Uses 2 seperate templates to produce a single web page :
 
@@ -649,10 +638,10 @@ The subtemplate which will be slotted into the 'guts' token position :
 
 The code :
 
- use HTMLTMPL;
+ use ZM::Template;
 
  # Create a template object and load the template source.
- my($templ) = new HTMLTMPL;
+ my($templ) = new ZM::Template;
  $templ->src('example5.html');
 
 
@@ -661,7 +650,7 @@ The code :
  $templ->firstname('Arthur');
  $templ->nickname('Art!');
 
- my $subTmpl = new HTMLTMPL;
+ my $subTmpl = new ZM::Template;
  $subTmpl->src('example5a.html');
  $subTmpl->widget('this is widget');
  $subTmpl->wodget('this is wodget');
@@ -675,6 +664,7 @@ The code :
 
 =head1 HISTORY
 
+ Oct 2003	Version 0.1.1	Some fixes in documentation, messages and code.
  Oct 2003	Version 0.1.0	Added __z_ token type
  Oct 2003	Version 0.0.3	First release
 
@@ -682,7 +672,7 @@ The code :
 
  Zet Maximum ltd.
  Maxim Kashliak
- Aleksey Ivanov
+ Aleksey V. Ivanov
  http://www.zmaximum.ru/
  http://perl.zmaximum.ru
  

@@ -3,7 +3,7 @@ NAME
     template file.
 
 VERSION
-     Template.pm v 0.1.0
+     Template.pm v 0.1.1
 
 SYNOPSIS
     How to merge data with a template.
@@ -19,10 +19,10 @@ SYNOPSIS
 
     The code :
 
-     use HTMLTMPL;
+     use ZM::Template;
 
      # Create a template object and load the template source.
-     $templ = new HTMLTMPL;
+     $templ = new ZM::Template;
      $templ->src('example1.html');
 
      # Set values for tokens within the page
@@ -129,15 +129,15 @@ METHODS
 
     output(@)
 
-    Merges the data already passed to the HTMLTMPL instance with the
+    Merges the data already passed to the ZM::Template instance with the
     template file specified in src(). The optional parameter is output
     first, followed by a blank line. These form the HTTP headers.
 
     htmlString()
 
     Returns a string of html produced by merging the data passed to the
-    HTMLTMPL instance with the template specified in the src() method. No
-    http headers are sent to the output string.
+    ZM::Template instance with the template specified in the src() method.
+    No http headers are sent to the output string.
 
     listAllTokens()
 
@@ -169,10 +169,10 @@ EXAMPLES
 
     The code :
 
-     use HTMLTMPL;
+     use ZM::Template;
 
      # Create a template object and load the template source.
-     $templ = new HTMLTMPL;
+     $templ = new ZM::Template;
      $templ->src('example1.html');
 
      # Set values for tokens within the page
@@ -222,10 +222,10 @@ EXAMPLES
 
     The code :
 
-     use HTMLTMPL;
+     use ZM::Template;
 
      # Create the template object and load it.
-     $templ = new HTMLTMPL;
+     $templ = new ZM::Template;
      $templ->src('example2.html');
 
      # Simulate obtaining data from database, etc and populate 300 blocks.
@@ -247,7 +247,7 @@ EXAMPLES
      #    Send the completed html document to the web server.
      $templ->output('Content-Type: text/html');
 
-  Example 5.
+  Example 3.
 
     Uses 2 seperate templates to produce a single web page :
 
@@ -280,10 +280,10 @@ EXAMPLES
 
     The code :
 
-     use HTMLTMPL;
+     use ZM::Template;
 
      # Create a template object and load the template source.
-     my($templ) = new HTMLTMPL;
+     my($templ) = new ZM::Template;
      $templ->src('example5.html');
 
      # Set values for tokens within the page
@@ -291,7 +291,7 @@ EXAMPLES
      $templ->firstname('Arthur');
      $templ->nickname('Art!');
 
-     my $subTmpl = new HTMLTMPL;
+     my $subTmpl = new ZM::Template;
      $subTmpl->src('example5a.html');
      $subTmpl->widget('this is widget');
      $subTmpl->wodget('this is wodget');
@@ -303,13 +303,14 @@ EXAMPLES
      $templ->output('Content-Type: text/html');
 
 HISTORY
+     Oct 2003       Version 0.1.1   Some fixes in documentation, messages and code.
      Oct 2003       Version 0.1.0   Added __z_ token type
      Oct 2003       Version 0.0.3   First release
 
 AUTHOR
      Zet Maximum ltd.
      Maxim Kashliak
-     Aleksey Ivanov
+     Aleksey V. Ivanov
      http://www.zmaximum.ru/
      http://perl.zmaximum.ru
  
