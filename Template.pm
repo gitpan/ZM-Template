@@ -1,7 +1,7 @@
 # Zet Maximum template parser
 #
-#		1999-2000
-#		Version 0.0.3	production
+#		2002-2003
+#		Version 0.1.0	production
 #		Author	Maxim Kashliak	(maxico@softhome.net)
 #				Aleksey Ivanov	(avi@zmaximum.ru)
 #
@@ -18,7 +18,7 @@ use Carp;
 
 no strict 'refs';
 
-$ZM::Template::VERSION = '0.0.3';
+$ZM::Template::VERSION = '0.1.0';
 
 my %tokens;
 
@@ -223,7 +223,7 @@ sub set_to_str
     return($ret);
 }
 
-sub fill_loops
+sub __fill_loops
 {	
     my $self=shift;
     my $text=shift;
@@ -324,14 +324,14 @@ sub output()
 
     print "\n";
 
-    $self->{html}=$self->fill_loops($self->{html});
+    $self->{html}=$self->_fill_loops($self->{html});
     print $self->{html};
 }
 
 sub htmlString()
 {
     my $self = shift;
-    $self->{html}=$self->fill_loops($self->{html});
+    $self->{html}=$self->_fill_loops($self->{html});
     return $self->{html};
 }
 
@@ -356,7 +356,7 @@ ZM::Template - Merges runtime data with static HTML or Plain Text template file.
 
 =head1 VERSION
 
- Template.pm v 0.0.3
+ Template.pm v 0.1.0
 
 =head1 SYNOPSIS
 
@@ -453,6 +453,22 @@ a matching pair of repeating block tokens. These have the format __x_blockName__
  </tr>
  __x_friends__
  </table>
+
+For interleave data in loop used __z_ token
+
+ and I have the following friends
+ <table>
+ __x_friends__
+ <tr>
+     <td bgcolor="#FEFEFE">__friendName__</td><td>__friendNickName__</td>
+ </tr>
+ __z_friends__
+ <tr>
+     <td bgcolor="#FFFFFF">__friendName__</td><td>__friendNickName__</td>
+ </tr>
+ __x_friends__
+ </table>
+
 
 Template engine understand inner loops like this
 
@@ -659,6 +675,7 @@ The code :
 
 =head1 HISTORY
 
+ Oct 2003	Version 0.1.0	Added __z_ token type
  Oct 2003	Version 0.0.3	First release
 
 =head1 AUTHOR

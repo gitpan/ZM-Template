@@ -3,7 +3,7 @@ NAME
     template file.
 
 VERSION
-     Template.pm v 0.0.3
+     Template.pm v 0.1.0
 
 SYNOPSIS
     How to merge data with a template.
@@ -85,6 +85,21 @@ DESCRIPTION
      __x_friends__
      <tr>
          <td>__friendName__</td><td>__friendNickName__</td>
+     </tr>
+     __x_friends__
+     </table>
+
+    For interleave data in loop used __z_ token
+
+     and I have the following friends
+     <table>
+     __x_friends__
+     <tr>
+         <td bgcolor="#FEFEFE">__friendName__</td><td>__friendNickName__</td>
+     </tr>
+     __z_friends__
+     <tr>
+         <td bgcolor="#FFFFFF">__friendName__</td><td>__friendNickName__</td>
      </tr>
      __x_friends__
      </table>
@@ -288,6 +303,7 @@ EXAMPLES
      $templ->output('Content-Type: text/html');
 
 HISTORY
+     Oct 2003       Version 0.1.0   Added __z_ token type
      Oct 2003       Version 0.0.3   First release
 
 AUTHOR
