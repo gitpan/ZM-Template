@@ -1,7 +1,7 @@
 # Zet Maximum template parser
 #
-#		2002-2003
-#		Version 0.5.2	production
+#		2002-2007
+#		Version 0.5.4 production
 #		Author	Maxim Kashliak	(maxico@softhome.net)
 #				Aleksey V. Ivanov	(avimail@zmaximum.ru)
 #
@@ -18,15 +18,13 @@ use Carp;
 
 no strict 'refs';
 
-$ZM::Template::VERSION = '0.5.2';
-
-my %tokens;
+$ZM::Template::VERSION = '0.6.4';
 
 sub new()
 {
     my $class = shift;
-	my %baseHtml=@_;
-	$baseHtml{tag}="__" if ($baseHtml{tag} eq "");
+    my %baseHtml=@_;
+    $baseHtml{tag}="__" if (!defined $baseHtml{tag} || $baseHtml{tag} eq "");
     bless \%baseHtml, $class;
     return \%baseHtml
 }
@@ -47,24 +45,34 @@ sub src()
     my $tmplString = <HTML>;
     close HTML;
     $/=$suxx;
-	# обработка SSI деректив внутри темплейта
-	eval('require ZM::SSI;');
-	$tmplString = ZM::SSI::parse($tmplString) unless $@;
-	$self->srcString($tmplString);
+    # обработка SSI деректив внутри темплейта
+    eval('require ZM::SSI;');
+    $tmplString = ZM::SSI::parse($tmplString) unless $@;
+    $self->srcString($tmplString);
 }
 
 sub srcString
 {
-	my $self = shift;
-	my $str = shift;
-	$self->{html}=$str;
+    my $self = shift;
+    my $str = shift;
+    $self->{html}=$str;
     _parse_tokens($self,$str);
 }
+sub srcStringSSI
+{
+    my $self = shift;
+    my $str = shift;
+    eval('require ZM::SSI;');
+    $str = ZM::SSI::parse($str) unless $@;
+    $self->{html}=$str;
+    _parse_tokens($self,$str);
+}
+
 
 sub listAllTokens
 {
 	my $self=shift;
-	return(keys %tokens);
+	return(keys %{$self->{tokens}});
 }
 
 sub _parse_tokens
@@ -73,12 +81,14 @@ sub _parse_tokens
     my $htmlString=shift;
     my ($padding, $token, $remainder);
 
-    while ($htmlString =~ /.*?(($self->{tag}x_.+?$self->{tag}\n)|($self->{tag}([^_]).*?$self->{tag}))/sg)
+#    while ($htmlString =~ /.*?(($self->{tag}x_.+?$self->{tag}\n)|($self->{tag}([^_]).*?$self->{tag}))/sg)
+#    while ($htmlString =~ /.*?$self->{tag}((x_)?.+?)$self->{tag}/sg) #orig
+    while ($htmlString =~ /.*?$self->{tag}([\da-zA-Z]([\_\-]*[\da-zA-Z])*?)$self->{tag}/sg)
     {
         $token = $1;
         $token =~ s/\n$//g;         # chomp $token (chomp bust as $/ undef'd)
-		$token =~ s/(^$self->{tag}|$self->{tag}$)//g;
-		$tokens{$token}=1;
+#	$token =~ s/(^$self->{tag}|$self->{tag}$)//g;
+	$self->{tokens}{$token}=1;
     }
 }
 
@@ -87,17 +97,34 @@ sub AUTOLOAD
 	my $token = $AUTOLOAD;
 	my ($self, $value, $block) = @_;
 	$token =~ s/.*:://;
-	if (defined $tokens{$token})
+	# здесь надо проверить не выглядит ли наша замена как токен, иначе она сотрется в последствии
+	#while ($value =~ /.*?$self->{tag}([^_].*?)$self->{tag}/s)
+	#{
+	# 	my $vtoken = $1;
+        #	$vtoken =~ s/\n$//g;
+	#	$nottokens{$vtoken}=1;
+	#}
+	if (defined $self->{tokens}{$token})
 	{
-	    if ($block ne "")
+	    if (defined $block and $block ne "")
 	    {
-			my $bl_new=$block."_new";
-			$bl_new=~s/^x_//; #надо обойтись без регекспа
-			if ($self->{loops}{$bl_new} ne "") 
+		my $bl_new=$block."_new";
+		$bl_new=~s/^x_//; #надо обойтись без регекспа
+		my $loop;
+		if (defined $self->{loops}{$bl_new}) 
+		{
+		    my $flag=0;
+		    foreach $loop(@{$self->{loops}{$bl_new}})
+		    {
+			if(strstr($loop,"$self->{tag}".$token."$self->{tag}"))
 			{
-			    $self->_post_loop($block) unless(strstr($self->{loops}{$bl_new},"$self->{tag}".$token."$self->{tag}"));
+			    $flag++;
+			    last;
 			}
-			$self->_set_loop($token,$value,$block);
+		    }
+		    $self->_post_loop($block) unless($flag);
+		}
+		$self->_set_loop($token,$value,$block);
 	    }
 	    else
 	    {
@@ -112,7 +139,7 @@ sub setif
 	my $token = shift;
 	my $loop = shift;
 	
-	if($loop eq "")
+	if(!defined $loop or $loop eq "")
 	{
 		$self->{ifs}->{$token}=1;
 	}
@@ -122,19 +149,36 @@ sub setif
 	}
 }
 
-sub fromfile
+sub delif
 {
 	my $self = shift;
 	my $token = shift;
-	my $file = shift;
-	my $block = shift;
+	my $loop = shift;
 	
-	open (my $f,"<$file") or return;
-	my $suxx=$/;
+	if(!defined $loop or $loop eq "")
+	{
+		delete $self->{ifs}->{$token};
+	}
+	else
+	{
+		delete $self->{ifs_loop}->{$loop}->{$token};
+	}
+}
+
+sub fromfile
+{
+    my $self = shift;
+    my $token = shift;
+    my $file = shift;
+    my $block = shift;
+	
+    open (my $f,"<$file") or return;
+    my $suxx=$/;
     undef $/;
-	my $filecontent=<$f>;
-	$/=$suxx;
-	$self->$token($filecontent,$block);
+    my $filecontent=<$f>;
+    $/=$suxx;
+    close($f);
+    $self->$token($filecontent,$block);
 }
 
 sub _set_loop
@@ -145,49 +189,56 @@ sub _set_loop
     my $block=shift;
 
     $block=~s/^x_//;
-
-    my ($loop, $loop_name, $loop_begin, $num, $loop2, $loop3);
-
-    if($self->{strnum}{$block} eq "")
+    my ($loop, $loop_name, $loop_begin, $num, $loop2, $loop3, $loop_after, $loops_ref);
+    my @loops=();
+    if(defined $self->{loops}{$block."_new"})
     {
-        $self->{strnum}{$block}=1;
-    }
-    if($self->{loops}{$block."_new"} ne "")
-    {
-		# если уже выставлялись токены в этом цикле
-        $loop=$self->{loops}{$block."_new"};
+	# если уже выставлялись токены в этом цикле
+        $loops_ref=$self->{loops}{$block."_new"};
     }
     else
     {
-		# если еще не вставлялись токены в этом цикле,
-		# то выдираем тело цикла из всего шаблона
+	# если еще не вставлялись токены в этом цикле,
+	# то выдираем тело цикла из всего шаблона
         $loop_name="$self->{tag}x_".$block."$self->{tag}";
-        $loop_begin=strstr($self->{html},$loop_name);
-        $loop_begin=substr($loop_begin,length($loop_name));
-        $loop=str_before($loop_begin,$loop_name);
+	# мы ищем все циклы с таким именем во всем документе
+	$loop_after=$self->{html};
+        while($loop_begin=strstr($loop_after,$loop_name))
+	{
+    	    $loop_begin=substr($loop_begin,length($loop_name));
+    	    ($loop,$loop_after)=str_split($loop_begin,$loop_name);
+	    push(@{$loops_ref},$loop);
+	}
     }
-    if(strstr($loop,"$self->{tag}z_".$block."$self->{tag}"))
+    my $loop_number=0;
+    foreach $loop(@$loops_ref)
     {
-        $num=$self->{strnum}{$block};
-        $loop2=$loop3=$loop;
-        while(($num)&&(($loop2=str_before($loop3,"$self->{tag}z_".$block."$self->{tag}")) ne $loop3))
-        {
-            $num--;
-            $loop3=str_after($loop3,"$self->{tag}z_".$block."$self->{tag}");
+        if(strstr($loop,"$self->{tag}z_".$block."$self->{tag}"))
+	{
+	    $self->{strnum}{$block}++;
+    	    $num=$self->{strnum}{$block};
+            $loop2=$loop3=$loop;
+	    while(($num)&&(($loop2=str_before($loop3,"$self->{tag}z_".$block."$self->{tag}")) ne $loop3))
+    	    {
+    		$num--;
+	        $loop3=str_after($loop3,"$self->{tag}z_".$block."$self->{tag}");
+    	    }
+            if($num==0)
+	    {
+    	        $loop=$loop2;
+        	#$self->{strnum}{$block}++;
+            }
+	    elsif($num>=1)
+	    {
+        	#$loop=str_before($loop,"$self->{tag}z_".$block."$self->{tag}");
+		$loop=$loop3;
+		$self->{strcount}{$block}=$self->{strnum}{$block}-1; #запомним номер последнего блока перед переходом на первый
+                $self->{strnum}{$block}=0;
+    	    }
         }
-        if($num==0)
-        {
-            $loop=$loop2;
-            $self->{strnum}{$block}++;
-        }
-		elsif($num>=1)
-		{
-            #$loop=str_before($loop,"$self->{tag}z_".$block."$self->{tag}");
-			$loop=$loop3;
-            $self->{strnum}{$block}=1;
-        }
+	$self->{loops}{$block.'_new'}[$loop_number]=$self->set_to_str($token,$value,$loop);
+	$loop_number++;
     }
-    $self->{loops}{$block."_new"}=$self->set_to_str($token,$value,$loop);
 }
 
 sub _post_loop
@@ -198,26 +249,51 @@ sub _post_loop
     $block=~s/^x_//;
 
     my ($text,$pos, $before_loop, $loop, $loop_name, $after_loop);
-    #Find and post inner loops
-    $text=$self->{loops}{$block."_new"};
-    while($pos=strstr($text,"$self->{tag}x_"))
+    my $loop_number;
+    if($self->{strnum}{$block}>1)
     {
-        $before_loop=substr($text,0,length($text)-length($pos));
-        $loop_name=substr($pos,4);
-        $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"$self->{tag}")));
-        $loop=strstr($text,"$self->{tag}x_".$loop_name."$self->{tag}");
-        $after_loop=str_after(str_after($loop,"$self->{tag}x_".$loop_name."$self->{tag}"),"$self->{tag}x_".$loop_name."$self->{tag}");
-        $loop=substr($loop,0,length($loop)-length($after_loop));
-        $self->_post_loop($loop_name);
-        $text=$before_loop.$self->{loops}{$loop_name}.$after_loop;
-        $self->{loops}{$loop_name}="";
-        $self->{strnum}{$loop_name}="";
+	$loop_number=$self->{strnum}{$block}-1;
     }
-	$text=_fill_ifs($self,$text,"x_".$block);
-    $self->{loops}{$block."_new"}=$text;
-    #POST
-    $self->{loops}{$block}.=$self->{loops}{$block."_new"};
-    $self->{loops}{$block."_new"}="";
+    elsif(defined $self->{strnum}{$block} && $self->{strnum}{$block}==0)
+    {
+	$loop_number=$self->{strcount}{$block};
+    }
+    else
+    {
+        $loop_number=0;
+    }
+    my $i=0;
+    foreach $text (@{$self->{loops}{$block."_new"}})
+    {
+	#Find and post inner loops
+	my %found_loops;
+	while($pos=strstr($text,"$self->{tag}x_"))
+	{
+    	    $before_loop=substr($text,0,length($text)-length($pos));
+    	    $loop_name=substr($pos,4);
+    	    $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"$self->{tag}")));
+	    $loop=strstr($text,"$self->{tag}x_".$loop_name."$self->{tag}");
+    	    $after_loop=str_after(str_after($loop,"$self->{tag}x_".$loop_name."$self->{tag}"),"$self->{tag}x_".$loop_name."$self->{tag}");
+            $loop=substr($loop,0,length($loop)-length($after_loop));
+	    $self->_post_loop($loop_name) if (defined $self->{loops}{$loop_name.'_new'});
+	    $found_loops{$loop_name}++;
+	    $text=$before_loop.$self->{loops}{$loop_name}[$loop_number].$after_loop;
+	}
+	# delete inner loops
+	foreach $loop_name (keys %found_loops)
+	{
+	    delete $self->{loops}{$loop_name};
+	    delete $self->{strnum}{$loop_name};
+	    delete $self->{strcount}{$loop_name};
+	}
+	$text=_fill_ifs($self,$text,'x_'.$block);
+	#$self->{loops}{$block."_new"}=$text;
+	#POST
+        $self->{loops}{$block}[$i] .= $text;
+	$i++;
+    }
+    delete $self->{ifs_loop}->{'x_'.$block}; # we must clear IFs for this loop
+    delete $self->{loops}{$block.'_new'};
 }
 
 sub set_to_str
@@ -232,9 +308,9 @@ sub set_to_str
     my $loop_name;
     while(($sub_str=str_before($str,"$self->{tag}x_")) ne $str)
     {
-	    # получаем имя цикла
-		$loop_name=str_before(substr($str,length($sub_str)+4),"$self->{tag}");
-		# заменяем переменную перед циклом, если она там есть
+	# получаем имя цикла
+	$loop_name=str_before(substr($str,length($sub_str)+4),"$self->{tag}");
+	# заменяем переменную перед циклом, если она там есть
         $ret.=str_replace("$self->{tag}".$token."$self->{tag}",$value,$sub_str);
         $ret.="$self->{tag}x_".$loop_name."$self->{tag}".str_before(substr($str,length($sub_str)+length($loop_name)+6),"$self->{tag}x_".$loop_name."$self->{tag}")."$self->{tag}x_".$loop_name."$self->{tag}";
         $str=str_after(substr($str,length($sub_str)+length($loop_name)+6),"$self->{tag}x_".$loop_name."$self->{tag}");
@@ -245,62 +321,57 @@ sub set_to_str
 
 sub _fill_ifs
 {
-	my $self=shift;
-	my $text=shift;
-	my $l_name=shift;
-	my ($pos,$before_loop,$loop_name,$loop,$after_loop,$if_name,$h_ifs);
-	if($l_name eq "")
-	{
-		$h_ifs=$self->{ifs};
-	}
-	else
-	{
-		$h_ifs=$self->{ifs_loop}->{$l_name};
-	}
-	
-	# удаляем незаполненные IF и вставляем заполненные в окончательный текст
+    my $self=shift;
+    my $text=shift;
+    my $l_name=shift;
+    my ($pos,$before_loop,$if_name,$loop,$loop_name,$after_loop,$h_ifs);
+    if(!defined $l_name || $l_name eq '')
+    {
+    	$h_ifs=$self->{ifs};
+    }
+    else
+    {
+	# надо заполнить IF для цикла
+    	$h_ifs=$self->{ifs_loop}->{$l_name};
+    }
+    # удаляем незаполненные IF и вставляем заполненные в окончательный текст
     while($pos=strstr($text,"$self->{tag}if_"))
     {
         $before_loop=substr($text,0,length($text)-length($pos));
         $loop_name=substr($pos,5);
         $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"$self->{tag}")));
-		$if_name="$self->{tag}if_".$loop_name."$self->{tag}";
-		$loop=$pos;
-		$after_loop=str_after(str_after($loop,$if_name),$if_name);
-		$loop=substr($loop,length($if_name),length($loop)-length($after_loop)-length($if_name)*2);
-		#$loop=substr($loop,length($if_name),length($loop)-length($after_loop));
-		#print "##################################\n";
-		#print "LOOP $if_name: $loop\n";
-		#print "##################################\n";
-		#print "AFTERLOOP: $after_loop\n";
-		#print "##################################\n";
-		unless(defined $h_ifs->{$loop_name})
+	$if_name="$self->{tag}if_".$loop_name."$self->{tag}";
+	$loop=$pos;
+	$after_loop=str_after(str_after($loop,$if_name),$if_name);
+	$loop=substr($loop,length($if_name),length($loop)-length($after_loop)-length($if_name)*2);
+	unless(defined $h_ifs->{$loop_name})
+	{
+		#IF не выставлялся
+		if($pos=strstr($loop,"$self->{tag}else_".$loop_name))
 		{
-			#IF не выставлялся
-			if($pos=strstr($loop,"$self->{tag}else_".$loop_name))
-			{
-				#else есть и его надо оставить
-				$loop=substr($pos,9+length($loop_name));
-			}
-			else
-			{
-				#else нет
-				$loop="";
-			}
+			#else есть и его надо оставить
+			$loop=substr($pos,9+length($loop_name));
 		}
 		else
 		{
-			#убираем содержимое ELSE, если таковой есть
-			if($pos=strstr($loop,"$self->{tag}else_".$loop_name))
-			{
-				#else есть и его надо оставить
-				$loop=str_before($loop,$pos);
-			}
-			undef $h_ifs->{$loop_name};
+			#else нет
+			$loop="";
 		}
-		$text=$before_loop.$loop.$after_loop;
+	}
+	else
+	{
+	    #убираем содержимое ELSE, если таковой есть
+	    if($pos=strstr($loop,"$self->{tag}else_".$loop_name))
+	    {
+		#else есть и его надо оставить
+		$loop=str_before($loop,$pos);
+	    }
+	    #undef $h_ifs->{$loop_name} if(!defined $l_name || $l_name eq '')
+	    
+	}
+	$text=$before_loop.$loop.$after_loop;
     }
-	return($text);
+    return($text);
 }
 
 sub _fill_loops
@@ -313,10 +384,10 @@ sub _fill_loops
     # постим те лупы, что запонились, но не заполнились
     foreach(keys %{$self->{loops}})
     {
-		if (($loop_name=str_before($_,"_new")) ne $_)
-		{
-	    	$self->_post_loop($loop_name) if($self->{loops}{$_} ne "");
-		}
+	if (($loop_name=str_before($_,"_new")) ne $_)
+	{
+	    $self->_post_loop($loop_name) if($self->{loops}{$_} ne "");
+	}
     }
     # удаляем незаполненные лупы и вставляем заполненные в окончательный текст
     while($pos=strstr($text,"$self->{tag}x_"))
@@ -328,13 +399,12 @@ sub _fill_loops
 		$loop=$pos;
         $after_loop=str_after(str_after($loop,"$self->{tag}x_".$loop_name."$self->{tag}"),"$self->{tag}x_".$loop_name."$self->{tag}");
         $loop=substr($loop,0,length($loop)-length($after_loop));
-        $text=$before_loop.$self->{loops}{$loop_name}.$after_loop;
+        $text=$before_loop.shift(@{$self->{loops}{$loop_name}}).$after_loop;
     }
 	my $tag=$self->{tag};
 	my $if_name;
 	$text=_fill_ifs($self,$text);
-#	print "|$tag|";
-    $text=~s/($tag)[\d\w_\-]+($tag)//g;
+    $text=~s/($tag)[\da-zA-Z\-][\w\-]*?($tag)//g;
     return($text);
 }
 
@@ -366,13 +436,52 @@ sub str_before
     }
     return $str;
 }
+sub str_split
+{
+    my $str=shift;
+    my $str2=shift;
+    my $indx=index($str,$str2);
+    if($indx!=-1)
+    {
+        my $lstr2=length($str2);
+        $str2=substr($str,$indx+$lstr2,length($str)-$indx-$lstr2);
+        $str=substr($str,0,$indx);
+    }
+    else
+    {
+        $str2='';
+    }
+    return ($str,$str2);
+}
+sub str_3_split
+{
+    my $str=shift;
+    my $str1=shift;
+    my $str2=shift;
+    ($str1,$str)=str_split($str,$str1);
+    if($str ne '')
+    {
+        ($str2,$str)=str_split($str,$str2);
+    }
+    else
+    {
+        $str2='';
+    }
+    return($str1,$str2,$str);
+}
 sub str_after
 {
     my $str=shift;
     my $str2=shift;
-    $str=substr($str,index($str,$str2)+length($str2),length($str)-index($str,$str2)-length($str2));
+    my $indx=index($str,$str2);
+    if($indx!=-1)
+    {
+        $str=substr($str,$indx+length($str2),length($str)-$indx-length($str2));
+    }
     return($str);
 }
+
+
 sub str_between
 {
     my $str=shift;
@@ -816,6 +925,7 @@ The code :
 
 =head1 HISTORY
 
+ Apr 2007	Version 0.5.3	Perfomance fixes.
  Jun 2004	Version 0.5.2	Parse SSI before template parsing.
  Oct 2003	Version 0.5.0	Added __else_ token type.
  Oct 2003	Version 0.4.1	Fixed some errors with __z_ token type.
