@@ -1,30 +1,30 @@
 # Zet Maximum template parser
 #
-#		2002-2007
-#		Version 0.5.4 production
-#		Author	Maxim Kashliak	(maxico@softhome.net)
+#		2002-2009
+#		Version 0.7.1 production
+#		Author	Maxim Kashliak	(max@zmaximum.ru)
 #				Aleksey V. Ivanov	(avimail@zmaximum.ru)
 #
 #		For latest releases, documentation, faqs, etc see the homepage at
 #			http://perl.zmaximum.ru
 #
 #
-
 package ZM::Template;
 
 use strict;
 use vars qw($AUTOLOAD);
 use Carp;
-
+use MIME::Base64;
 no strict 'refs';
 
-$ZM::Template::VERSION = '0.6.4';
+$ZM::Template::VERSION = '0.7.1';
 
 sub new()
 {
     my $class = shift;
     my %baseHtml=@_;
     $baseHtml{tag}="__" if (!defined $baseHtml{tag} || $baseHtml{tag} eq "");
+    $baseHtml{_loops_filled}=0;
     bless \%baseHtml, $class;
     return \%baseHtml
 }
@@ -48,6 +48,13 @@ sub src()
     # обработка SSI деректив внутри темплейта
     eval('require ZM::SSI;');
     $tmplString = ZM::SSI::parse($tmplString) unless $@;
+    # задаем папку для хранения кеша, если она не была указана при создании объекта
+    unless (defined $self->{cacheDIR})
+    {
+	$src=~s/\/.*?$//;
+	$self->{cacheDIR}=$src.'/cache';
+    }
+    
     $self->srcString($tmplString);
 }
 
@@ -378,33 +385,36 @@ sub _fill_loops
 {	
     my $self=shift;
     my $text=shift;
-
-    my ($pos, $before_loop, $loop_name, $loop, $after_loop);
-
-    # постим те лупы, что запонились, но не заполнились
-    foreach(keys %{$self->{loops}})
+    unless($self->{_loops_filled})
     {
-	if (($loop_name=str_before($_,"_new")) ne $_)
+        my ($pos, $before_loop, $loop_name, $loop, $after_loop);
+
+	# постим те лупы, что запонились, но не заполнились
+        foreach(keys %{$self->{loops}})
 	{
-	    $self->_post_loop($loop_name) if($self->{loops}{$_} ne "");
+	    if (($loop_name=str_before($_,"_new")) ne $_)
+	    {
+		$self->_post_loop($loop_name) if($self->{loops}{$_} ne "");
+	    }
 	}
-    }
-    # удаляем незаполненные лупы и вставляем заполненные в окончательный текст
-    while($pos=strstr($text,"$self->{tag}x_"))
-    {
-        $before_loop=substr($text,0,length($text)-length($pos));
-        $loop_name=substr($pos,4);
-        $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"$self->{tag}")));
-        #$loop=strstr($text,"$self->{tag}x_".$loop_name."$self->{tag}");
-		$loop=$pos;
-        $after_loop=str_after(str_after($loop,"$self->{tag}x_".$loop_name."$self->{tag}"),"$self->{tag}x_".$loop_name."$self->{tag}");
-        $loop=substr($loop,0,length($loop)-length($after_loop));
-        $text=$before_loop.shift(@{$self->{loops}{$loop_name}}).$after_loop;
-    }
+	# удаляем незаполненные лупы и вставляем заполненные в окончательный текст
+	while($pos=strstr($text,"$self->{tag}x_"))
+	{
+    	    $before_loop=substr($text,0,length($text)-length($pos));
+    	    $loop_name=substr($pos,4);
+    	    $loop_name=substr($loop_name,0,length($loop_name)-length(strstr($loop_name,"$self->{tag}")));
+    	    #$loop=strstr($text,"$self->{tag}x_".$loop_name."$self->{tag}");
+	    $loop=$pos;
+    	    $after_loop=str_after(str_after($loop,"$self->{tag}x_".$loop_name."$self->{tag}"),"$self->{tag}x_".$loop_name."$self->{tag}");
+    	    $loop=substr($loop,0,length($loop)-length($after_loop));
+    	    $text=$before_loop.shift(@{$self->{loops}{$loop_name}}).$after_loop;
+	}
 	my $tag=$self->{tag};
 	my $if_name;
 	$text=_fill_ifs($self,$text);
-    $text=~s/($tag)[\da-zA-Z\-][\w\-]*?($tag)//g;
+	$text=~s/($tag)[\da-zA-Z\-][\w\-]*?($tag)//g;
+	$self->{_loops_filled}=1;
+    }
     return($text);
 }
 
@@ -516,12 +526,60 @@ sub output()
     print $self->htmlString();
 }
 
+sub setCache
+{
+    my $self = shift;
+    my $cacheKey = shift;
+    return 0 unless (defined $self->{cacheDIR});
+    mkdir($self->{cacheDIR}) unless(-d $self->{cacheDIR});
+    my $encodedKey=encode_base64($cacheKey);
+    chomp($encodedKey);
+    open(my $f,'>'.$self->{cacheDIR}.'/'.$encodedKey);
+    print $f $self->htmlString();
+    close($f);
+    return 1;
+}
+
+sub getCache
+{
+    my $self = shift;
+    my $cacheKey = shift;
+    return 0 unless (defined $self->{cacheDIR});
+    my $encodedKey=encode_base64($cacheKey);
+    chomp($encodedKey);
+    my $cacheFile = $self->{cacheDIR}.'/'.$encodedKey;
+    return 0 unless(-f $cacheFile);
+    my $suxx=$/;                                                                                                                                                 
+    undef $/; 
+    open(my $f, $cacheFile);
+    $self->{html}=<$f>;
+    close($f);
+    $/=$suxx;
+    $self->{_loops_filled}=1;
+    return 1;
+}
+
+sub rmCache
+{
+    my $self = shift;
+    my $cacheKey = shift;
+    my $encodedKey=encode_base64($cacheKey);
+    chomp($encodedKey);
+    return unlink($self->{cacheDIR}.'/'.$encodedKey);
+}
+
+sub clearCache
+{
+    my $self = shift;
+    return 0 unless (defined $self->{cacheDIR});
+    unlink (glob($self->{cacheDIR}.'/*'));
+    return 1;
+}
+
 sub htmlString()
 {
     my $self = shift;
-
     $self->{html}=$self->_fill_loops($self->{html});
-	
     return $self->{html};
 }
 
@@ -925,6 +983,7 @@ The code :
 
 =head1 HISTORY
 
+ Jun 2009	Version 0.7.1	Added cache system
  Apr 2007	Version 0.5.3	Perfomance fixes.
  Jun 2004	Version 0.5.2	Parse SSI before template parsing.
  Oct 2003	Version 0.5.0	Added __else_ token type.
