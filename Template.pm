@@ -1,7 +1,7 @@
 # Zet Maximum template parser
 #
 #		2002-2009
-#		Version 0.7.1 production
+#		Version 0.7.2 production
 #		Author	Maxim Kashliak	(max@zmaximum.ru)
 #				Aleksey V. Ivanov	(avimail@zmaximum.ru)
 #
@@ -17,7 +17,7 @@ use Carp;
 use MIME::Base64;
 no strict 'refs';
 
-$ZM::Template::VERSION = '0.7.1';
+$ZM::Template::VERSION = '0.7.2';
 
 sub new()
 {
@@ -533,7 +533,8 @@ sub setCache
     return 0 unless (defined $self->{cacheDIR});
     mkdir($self->{cacheDIR}) unless(-d $self->{cacheDIR});
     my $encodedKey=encode_base64($cacheKey);
-    chomp($encodedKey);
+#    chomp($encodedKey);
+    $encodedKey=~s/[\n\s]//sg;
     open(my $f,'>'.$self->{cacheDIR}.'/'.$encodedKey);
     print $f $self->htmlString();
     close($f);
@@ -546,7 +547,8 @@ sub getCache
     my $cacheKey = shift;
     return 0 unless (defined $self->{cacheDIR});
     my $encodedKey=encode_base64($cacheKey);
-    chomp($encodedKey);
+#    chomp($encodedKey);
+    $encodedKey=~s/[\n\s]//sg;
     my $cacheFile = $self->{cacheDIR}.'/'.$encodedKey;
     return 0 unless(-f $cacheFile);
     my $suxx=$/;                                                                                                                                                 
@@ -564,7 +566,8 @@ sub rmCache
     my $self = shift;
     my $cacheKey = shift;
     my $encodedKey=encode_base64($cacheKey);
-    chomp($encodedKey);
+    $encodedKey=~s/[\n\s]//sg;
+#    chomp($encodedKey);
     return unlink($self->{cacheDIR}.'/'.$encodedKey);
 }
 
@@ -612,7 +615,7 @@ ZM::Template - Merges runtime data with static HTML or Plain Text template file.
 
 =head1 VERSION
 
- Template.pm v 0.5.2
+ Template.pm v 0.7.2
 
 =head1 SYNOPSIS
 
@@ -983,7 +986,7 @@ The code :
 
 =head1 HISTORY
 
- Jun 2009	Version 0.7.1	Added cache system
+ Jun 2009	Version 0.7.2	Added setCache, getCache, rmCache, clearCache methods.
  Apr 2007	Version 0.5.3	Perfomance fixes.
  Jun 2004	Version 0.5.2	Parse SSI before template parsing.
  Oct 2003	Version 0.5.0	Added __else_ token type.
